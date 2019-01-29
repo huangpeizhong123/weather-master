@@ -25,8 +25,8 @@ public class NetworkUtil {
         }
         ConnectivityManager manager = (ConnectivityManager) context
                 .getSystemService(Context.CONNECTIVITY_SERVICE);
-        NetworkInfo[] infos = manager.getAllNetworkInfo();
-        for (NetworkInfo info : infos) {
+        NetworkInfo[] infoNet = manager.getAllNetworkInfo();
+        for (NetworkInfo info : infoNet) {
             if (info.isConnected()) {
                 return true;
             }

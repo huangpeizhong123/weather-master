@@ -32,6 +32,7 @@ public class BaseApplication extends Application {
 
         context = getApplicationContext();
 
+        //网络请求OkHttp配置信息
         HttpsUtils.SSLParams sslParams = HttpsUtils.getSslSocketFactory(null, null, null);
         OkHttpClient okHttpClient = new OkHttpClient.Builder()
                 .connectTimeout(20000L, TimeUnit.MILLISECONDS)

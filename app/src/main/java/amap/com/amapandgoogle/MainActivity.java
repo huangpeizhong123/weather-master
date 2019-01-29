@@ -1,6 +1,7 @@
 package amap.com.amapandgoogle;
 
 import android.annotation.SuppressLint;
+import android.annotation.TargetApi;
 import android.app.AlertDialog;
 import android.app.ProgressDialog;
 import android.content.BroadcastReceiver;
@@ -10,6 +11,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.net.ConnectivityManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
@@ -45,35 +47,32 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Timer;
 import java.util.TimerTask;
 
 import okhttp3.Call;
 
-public class MainActivity extends FragmentActivity implements AMap.OnCameraChangeListener,
-        OnMapReadyCallback, GoogleMap.OnCameraMoveListener {
+public class MainActivity extends FragmentActivity implements OnMapReadyCallback, GoogleMap.OnCameraMoveListener {
     private LinearLayout mContainerLayout;
     private LayoutParams mParams;
-    private TextureMapView mAmapView;
+    private TextureMapView mAMapView;
     private MapView mGoogleMapView;
-    private float zoom = 5;//设置要看的具体位置
     private GoogleMap googlemap;
     private AMapLocationClient mLocationClient;
-    private AlphaAnimation anAppear;
-    private AlphaAnimation anDisappear;
-    private IntentFilter mIntentFilter;
-    private ImageView imageView;
     private Timer timer;
     private TimerTask timerTask;
     private ProgressDialog progressDialog;
+    private float zoom = 5;//设置要看的具体位置
     private List<WeatherBean.AreaMetadataBean> listWeather = new ArrayList<>();
 
+    @TargetApi(Build.VERSION_CODES.KITKAT)
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         mContainerLayout = (LinearLayout) findViewById(R.id.map_container);
-        imageView = (ImageView) findViewById(R.id.iv_refresh);
+        ImageView imageView = (ImageView) findViewById(R.id.iv_refresh);
 
         //数据加载框
         progressDialog = new ProgressDialog(MainActivity.this, ProgressDialog.STYLE_SPINNER);
@@ -93,9 +92,10 @@ public class MainActivity extends FragmentActivity implements AMap.OnCameraChang
             }
         });
 
+        //如果有缓存先展示缓存的，增强体验效果
         if (SaveCacheUtils.getWeatherBean(MainActivity.this) != null && NetworkUtil.isNetworkAvailable(this)) {
             initViewData();
-            listWeather = SaveCacheUtils.getWeatherBean(MainActivity.this).getArea_metadata();
+            listWeather = Objects.requireNonNull(SaveCacheUtils.getWeatherBean(MainActivity.this)).getArea_metadata();
         }
 
         //定时器轮询2分钟刷新下接口数据
@@ -107,13 +107,15 @@ public class MainActivity extends FragmentActivity implements AMap.OnCameraChang
      * 初始化地图
      */
     private void initViewData() {
-        mAmapView = new TextureMapView(this);
+        mAMapView = new TextureMapView(this);
         mParams = new LayoutParams(LayoutParams.MATCH_PARENT,
                 LayoutParams.MATCH_PARENT);
+
+        //显示地图页面
         if (!checkGooglePlayServices()) {
             return;
         }
-        zoom = mAmapView.getMap().getCameraPosition().zoom;
+        zoom = mAMapView.getMap().getCameraPosition().zoom;
         mGoogleMapView = new com.google.android.gms.maps.MapView(this, new GoogleMapOptions()
                 .camera(new com.google.android.gms.maps.model
                         .CameraPosition(new com.google.android.gms.maps.model.LatLng(1.375, 103.839), zoom, 0, 0)));
@@ -122,19 +124,18 @@ public class MainActivity extends FragmentActivity implements AMap.OnCameraChang
         mContainerLayout.addView(mGoogleMapView, mParams);
         mGoogleMapView.getMapAsync(this);
         handler.sendEmptyMessage(0);
-
-        anAppear = new AlphaAnimation(0, 1);
-        anDisappear = new AlphaAnimation(1, 0);
+        AlphaAnimation anAppear = new AlphaAnimation(0, 1);
+        AlphaAnimation anDisappear = new AlphaAnimation(1, 0);
         anAppear.setDuration(5000);
         anDisappear.setDuration(5000);
 
-        // 注册广播，监听应用必须谷歌服务安装情况
-        mIntentFilter = new IntentFilter(
+        //注册广播，监听应用必须谷歌服务安装情况
+        IntentFilter mIntentFilter = new IntentFilter(
                 ConnectivityManager.CONNECTIVITY_ACTION);
         mIntentFilter.addAction(Intent.ACTION_PACKAGE_ADDED);
         mIntentFilter.addAction(Intent.ACTION_PACKAGE_REPLACED);
         mIntentFilter.addDataScheme("package");
-        registerReceiver(mInstallReciver, mIntentFilter);
+        registerReceiver(mInstallReceiver, mIntentFilter);
     }
 
     //网络请求
@@ -142,7 +143,7 @@ public class MainActivity extends FragmentActivity implements AMap.OnCameraChang
         timerTask = new TimerTask() {
             @Override
             public void run() {
-                //轮询请求
+                //轮询请求，2分钟
                 requestWeatherData();
             }
         };
@@ -152,12 +153,13 @@ public class MainActivity extends FragmentActivity implements AMap.OnCameraChang
     //接口数据
     private void requestWeatherData() {
         OkHttpUtils.get().url(ApiConstant.WEATHER_APT).build().execute(new StringCallback() {
+            @TargetApi(Build.VERSION_CODES.KITKAT)
             @Override
             public void onError(Call call, Exception e, int id) {
-
+                //请求失败的情况
                 progressDialog.dismiss();
                 if (SaveCacheUtils.getWeatherBean(MainActivity.this) != null) {
-                    listWeather = SaveCacheUtils.getWeatherBean(MainActivity.this).getArea_metadata();
+                    listWeather = Objects.requireNonNull(SaveCacheUtils.getWeatherBean(MainActivity.this)).getArea_metadata();
                     initViewData();
                 } else {
                     Toast.makeText(MainActivity.this, "无网络..", Toast.LENGTH_SHORT).show();
@@ -167,6 +169,7 @@ public class MainActivity extends FragmentActivity implements AMap.OnCameraChang
 
             @Override
             public void onResponse(String response, int id) {
+                //成功的回调
                 initViewData();
                 progressDialog.dismiss();
                 Gson gson = new Gson();
@@ -181,10 +184,10 @@ public class MainActivity extends FragmentActivity implements AMap.OnCameraChang
     @SuppressLint("HandlerLeak")
     private Handler handler = new Handler() {
         public void handleMessage(Message message) {
-            mAmapView.setVisibility(View.GONE);
-            mContainerLayout.removeView(mAmapView);
-            if (mAmapView != null) {
-                mAmapView.onDestroy();
+            mAMapView.setVisibility(View.GONE);
+            mContainerLayout.removeView(mAMapView);
+            if (mAMapView != null) {
+                mAMapView.onDestroy();
             }
         }
     };
@@ -196,7 +199,7 @@ public class MainActivity extends FragmentActivity implements AMap.OnCameraChang
         if (!checkGooglePlayServices()) {
             return;
         }
-        zoom = mAmapView.getMap().getCameraPosition().zoom;
+        zoom = mAMapView.getMap().getCameraPosition().zoom;
         mGoogleMapView = new com.google.android.gms.maps.MapView(this, new GoogleMapOptions()
                 .camera(new com.google.android.gms.maps.model
                         .CameraPosition(new com.google.android.gms.maps.model.LatLng(1.375, 103.839), 5, 0, 0)));
@@ -208,28 +211,16 @@ public class MainActivity extends FragmentActivity implements AMap.OnCameraChang
     }
 
     @Override
-    public void onCameraChange(com.amap.api.maps.model.CameraPosition cameraPosition) {
-
-    }
-
-    /**
-     * @param cameraPosition 地图移动结束的中心点位置信息
-     */
-    @Override
-    public void onCameraChangeFinish(com.amap.api.maps.model.CameraPosition cameraPosition) {
-        zoom = cameraPosition.zoom;
-    }
-
-    @Override
     protected void onResume() {
         super.onResume();
-        if (mAmapView != null) {
-            mAmapView.onResume();
+        if (mAMapView != null) {
+            mAMapView.onResume();
         }
         if (mGoogleMapView != null) {
             try {
                 mGoogleMapView.onResume();
             } catch (Exception e) {
+                Log.e("onResume", e.getMessage());
             }
         }
     }
@@ -237,13 +228,14 @@ public class MainActivity extends FragmentActivity implements AMap.OnCameraChang
     @Override
     protected void onPause() {
         super.onPause();
-        if (mAmapView != null) {
-            mAmapView.onPause();
+        if (mAMapView != null) {
+            mAMapView.onPause();
         }
         if (mGoogleMapView != null) {
             try {
                 mGoogleMapView.onPause();
             } catch (Exception e) {
+                Log.e("onPause", e.getMessage());
             }
         }
     }
@@ -251,13 +243,14 @@ public class MainActivity extends FragmentActivity implements AMap.OnCameraChang
     @Override
     protected void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
-        if (mAmapView != null) {
-            mAmapView.onSaveInstanceState(outState);
+        if (mAMapView != null) {
+            mAMapView.onSaveInstanceState(outState);
         }
         if (mGoogleMapView != null) {
             try {
                 mGoogleMapView.onSaveInstanceState(outState);
             } catch (Exception e) {
+                Log.e("onSaveInstanceState", e.getMessage());
             }
         }
     }
@@ -268,13 +261,14 @@ public class MainActivity extends FragmentActivity implements AMap.OnCameraChang
         super.onDestroy();
         destroyLocation();
         if (timer != null) timer.cancel();
-        if (mAmapView != null) {
-            mAmapView.onDestroy();
+        if (mAMapView != null) {
+            mAMapView.onDestroy();
         }
         if (mGoogleMapView != null) {
             try {
                 mGoogleMapView.onDestroy();
             } catch (Exception e) {
+                Log.e("onDestroy", e.getMessage());
             }
         }
     }
@@ -292,9 +286,11 @@ public class MainActivity extends FragmentActivity implements AMap.OnCameraChang
         }
         for (int i = 0; i < listWeather.size(); i++) {
             WeatherBean.AreaMetadataBean weatherBean = listWeather.get(i);
-            googlemap.addMarker(new com.google.android.gms.maps.model.MarkerOptions().position(
-                    new com.google.android.gms.maps.model.LatLng(weatherBean.getLabel_location().getLatitude(),
-                            weatherBean.getLabel_location().getLongitude())).icon(BitmapDescriptorFactory.fromResource(R.mipmap.icon_windly)));
+            if (googlemap != null) {
+                googlemap.addMarker(new com.google.android.gms.maps.model.MarkerOptions().position(
+                        new com.google.android.gms.maps.model.LatLng(weatherBean.getLabel_location().getLatitude(),
+                                weatherBean.getLabel_location().getLongitude())).icon(BitmapDescriptorFactory.fromResource(R.mipmap.icon_windly)));
+            }
         }
     }
 
@@ -394,7 +390,6 @@ public class MainActivity extends FragmentActivity implements AMap.OnCameraChang
 
             getApplicationContext().startActivity(intent);
         } catch (IOException e) {
-
             e.printStackTrace();
         }
 
@@ -403,13 +398,11 @@ public class MainActivity extends FragmentActivity implements AMap.OnCameraChang
     /**
      * 监听应用安装完成的广播
      */
-    private BroadcastReceiver mInstallReciver = new BroadcastReceiver() {
+    private BroadcastReceiver mInstallReceiver = new BroadcastReceiver() {
 
         @Override
         public void onReceive(Context context, Intent intent) {
-            if (intent.getAction()
-                    .equals("android.intent.action.PACKAGE_ADDED")
-                    || intent.getAction()
+            if (intent.getAction().equals("android.intent.action.PACKAGE_ADDED") || intent.getAction()
                     .equals(Intent.ACTION_PACKAGE_REPLACED)) {
                 String packageName = intent.getDataString();
                 if (packageName.equals("package:com.google.android.gms")) {

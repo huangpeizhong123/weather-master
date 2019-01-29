@@ -15,7 +15,7 @@ import com.google.gson.Gson;
  */
 public final class SaveCacheUtils {
 
-    // 获取缓存信息
+    //获取缓存信息
     public static WeatherBean getWeatherBean(Context context) {
         String str = ACacheUtil.get(context).getAsString("weather");
         if (!TextUtils.isEmpty(str)) {
